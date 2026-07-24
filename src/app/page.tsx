@@ -1,4 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getOptionalUser } from "@/server/auth/session";
+import { ROLE_HOME } from "@/lib/rbac";
+
+export const dynamic = "force-dynamic";
 
 const personas = [
   {
@@ -15,7 +20,11 @@ const personas = [
   },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Signed-in visitors go straight to their dashboard.
+  const user = await getOptionalUser();
+  if (user) redirect(ROLE_HOME[user.role]);
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-16">
       <header className="mb-12">

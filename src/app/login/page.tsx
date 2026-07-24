@@ -25,7 +25,8 @@ export default function LoginPage() {
       setError("Invalid email or password.");
       return;
     }
-    router.push("/");
+    // Route to the role-appropriate dashboard (resolved server-side).
+    router.push("/dashboard");
     router.refresh();
   }
 
