@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
+import { rateLimiter, RATE_LIMITS } from "@/lib/rate-limit";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -28,15 +29,25 @@ export const authOptions: NextAuthOptions = {
         const parsed = credentialsSchema.safeParse(raw);
         if (!parsed.success) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: parsed.data.email.toLowerCase() },
-        });
+        const email = parsed.data.email.toLowerCase();
+
+        // Throttle credential attempts per identity to blunt brute force
+        // (in-memory now; Redis-backed at M2 — same interface). SECURITY §2/§6.
+        const key = `login:${email}`;
+        if (!rateLimiter.check(key, RATE_LIMITS.login.limit, RATE_LIMITS.login.windowMs).allowed) {
+          return null;
+        }
+
+        const user = await prisma.user.findUnique({ where: { email } });
         // Uniform failure to avoid account enumeration (docs/SECURITY.md §2).
         if (!user || user.status === "disabled") return null;
 
         const valid = await verifyPassword(user.passwordHash, parsed.data.password);
         if (!valid) return null;
         if (!user.emailVerifiedAt) return null;
+
+        // Successful auth clears the throttle for this identity.
+        rateLimiter.reset(key);
 
         return {
           id: user.id,

@@ -1,6 +1,12 @@
 # Architecture Decision Records (ADRs)
 
-**Status:** Proposed — pending sign-off · **Date:** 2026-07-25
+**Status:** ✅ Accepted 2026-07-25 · **Date:** 2026-07-25
+
+**Confirmed decisions (sign-off 2026-07-25):** ADR-001 shared-schema + RLS · evolve the
+deployed app (no rewrite) · start with milestone **M0 (harden foundation)** · build on
+low-cost infra now, deferring Redis/workers/AV/OTel backends to M2–M3. Where an ADR names a
+paid dependency (BullMQ/Redis, ClamAV, OTel backend), M0 ships an **in-process shim behind
+the same interface**, swapped for the real service at M2–M3 with no caller changes.
 
 Each ADR states the decision, the rationale, the rejected alternatives, and the trade-off
 we are consciously accepting. ADRs marked ⛳ are **forks** we want explicit confirmation on
