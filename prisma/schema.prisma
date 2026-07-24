@@ -1,0 +1,388 @@
+// Prisma schema for the Study Abroad Application Portal.
+// See docs/DATA_MODEL.md for the full data model rationale.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------
+// Enums
+// ------------------------------------------------------------------
+
+enum Role {
+  student
+  agent
+  agency_admin
+  super_admin
+}
+
+enum UserStatus {
+  invited
+  active
+  disabled
+}
+
+enum AgencyStatus {
+  active
+  suspended
+}
+
+enum DegreeLevel {
+  bachelor
+  master
+  phd
+  diploma
+}
+
+enum DocPhase {
+  core
+  post_admission
+}
+
+enum DocumentType {
+  transcript
+  diploma
+  english_test
+  passport
+  sop
+  recommendation_letter
+  cv
+  financial_proof
+  sponsor_letter
+  visa_document
+  medical
+  insurance
+  accommodation
+  other
+}
+
+enum ApplicationStage {
+  draft
+  documents_pending
+  ready_for_review
+  under_agent_review
+  submitted_to_university
+  university_reviewing
+  offer_received
+  accepted
+  rejected
+  withdrawn
+  enrolled
+}
+
+enum EligibilityResult {
+  eligible
+  borderline
+  not_eligible
+}
+
+enum ScanStatus {
+  pending
+  clean
+  infected
+}
+
+enum ReviewStatus {
+  pending
+  approved
+  rejected
+  reupload_requested
+}
+
+enum CommissionStatus {
+  pending
+  invoiced
+  paid
+  cancelled
+}
+
+// ------------------------------------------------------------------
+// Identity & tenancy
+// ------------------------------------------------------------------
+
+model Agency {
+  id        String       @id @default(uuid())
+  name      String
+  status    AgencyStatus @default(active)
+  users     User[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model User {
+  id              String     @id @default(uuid())
+  role            Role
+  agencyId        String?
+  agency          Agency?    @relation(fields: [agencyId], references: [id])
+  email           String     @unique
+  passwordHash    String
+  emailVerifiedAt DateTime?
+  status          UserStatus @default(invited)
+
+  profile             StudentProfile?
+  applications        Application[]      @relation("StudentApplications")
+  agentAssignments    Assignment[]       @relation("AgentAssignments")
+  studentAssignments  Assignment[]       @relation("StudentAssignments")
+  assignedApplications Application[]     @relation("AgentApplications")
+  reviewedDocuments   Document[]         @relation("DocumentReviewer")
+  sentMessages        Message[]          @relation("MessageSender")
+  applicationEvents   ApplicationEvent[] @relation("EventActor")
+  notifications       Notification[]
+  auditLogs           AuditLog[]         @relation("AuditActor")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId, role])
+}
+
+model StudentProfile {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName         String
+  dateOfBirth      DateTime?
+  nationality      String?
+  phone            String?
+  educationHistory Json     @default("[]") // [{ level, institution, gpa, gpaScale, year }]
+  testScores       Json     @default("{}") // { ielts, toefl, pte, duolingo, gre, gmat }
+  budgetAnnual     Int?
+  targetIntake     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ------------------------------------------------------------------
+// Catalog
+// ------------------------------------------------------------------
+
+model Country {
+  id           String       @id @default(uuid())
+  name         String
+  isoCode      String       @unique
+  active       Boolean      @default(true)
+  universities University[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model University {
+  id        String    @id @default(uuid())
+  countryId String
+  country   Country   @relation(fields: [countryId], references: [id])
+  name      String
+  city      String?
+  ranking   Int?
+  active    Boolean   @default(true)
+  programs  Program[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([countryId])
+}
+
+model Program {
+  id             String           @id @default(uuid())
+  universityId   String
+  university     University       @relation(fields: [universityId], references: [id])
+  name           String
+  degreeLevel    DegreeLevel
+  discipline     String
+  durationMonths Int
+  tuitionAnnual  Int
+  active         Boolean          @default(true)
+  requirementSets RequirementSet[]
+  applications   Application[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([universityId])
+}
+
+model RequirementSet {
+  id                String             @id @default(uuid())
+  programId         String
+  program           Program            @relation(fields: [programId], references: [id])
+  intake            String
+  version           Int                @default(1)
+  minGpa            Decimal?           @db.Decimal(4, 2)
+  gpaScale          Decimal?           @db.Decimal(4, 2)
+  minIelts          Decimal?           @db.Decimal(3, 1)
+  minToefl          Decimal?           @db.Decimal(5, 1)
+  minPte            Decimal?           @db.Decimal(4, 1)
+  minDuolingo       Decimal?           @db.Decimal(4, 1)
+  applicationDeadline DateTime?
+  applicationFee    Int                @default(0)
+  active            Boolean            @default(true)
+  requiredDocuments RequiredDocument[]
+  applications      Application[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@unique([programId, intake, version])
+  @@index([programId, intake])
+}
+
+model RequiredDocument {
+  id               String         @id @default(uuid())
+  requirementSetId String
+  requirementSet   RequirementSet @relation(fields: [requirementSetId], references: [id], onDelete: Cascade)
+  documentType     DocumentType
+  phase            DocPhase
+  required         Boolean        @default(true)
+  notes            String?
+
+  @@index([requirementSetId])
+}
+
+// ------------------------------------------------------------------
+// Assignment (agent <-> student)
+// ------------------------------------------------------------------
+
+model Assignment {
+  id            String   @id @default(uuid())
+  agencyId      String
+  agentUserId   String
+  agent         User     @relation("AgentAssignments", fields: [agentUserId], references: [id])
+  studentUserId String
+  student       User     @relation("StudentAssignments", fields: [studentUserId], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@unique([agentUserId, studentUserId])
+  @@index([agencyId])
+  @@index([studentUserId])
+}
+
+// ------------------------------------------------------------------
+// Applications & documents
+// ------------------------------------------------------------------
+
+model Application {
+  id                      String            @id @default(uuid())
+  studentUserId           String
+  student                 User              @relation("StudentApplications", fields: [studentUserId], references: [id])
+  agencyId                String
+  assignedAgentUserId     String?
+  assignedAgent           User?             @relation("AgentApplications", fields: [assignedAgentUserId], references: [id])
+  programId               String
+  program                 Program           @relation(fields: [programId], references: [id])
+  requirementSetId        String
+  requirementSet          RequirementSet    @relation(fields: [requirementSetId], references: [id])
+  intake                  String
+  stage                   ApplicationStage  @default(draft)
+  eligibilityResult       EligibilityResult
+  universityReference     String?
+  submittedToAgentAt      DateTime?
+  submittedToUniversityAt DateTime?
+  decisionAt              DateTime?
+  documents               Document[]
+  events                  ApplicationEvent[]
+  messages                Message[]
+  commissions             Commission[]
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  @@index([agencyId, stage])
+  @@index([assignedAgentUserId])
+  @@index([studentUserId])
+}
+
+model Document {
+  id               String       @id @default(uuid())
+  applicationId    String
+  application      Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  documentType     DocumentType
+  phase            DocPhase
+  storageKey       String
+  fileName         String
+  mimeType         String
+  sizeBytes        Int
+  version          Int          @default(1)
+  scanStatus       ScanStatus   @default(pending)
+  reviewStatus     ReviewStatus @default(pending)
+  reviewReason     String?
+  reviewedByUserId String?
+  reviewedBy       User?        @relation("DocumentReviewer", fields: [reviewedByUserId], references: [id])
+  uploadedAt       DateTime     @default(now())
+  reviewedAt       DateTime?
+
+  @@index([applicationId])
+}
+
+// ------------------------------------------------------------------
+// Collaboration & audit
+// ------------------------------------------------------------------
+
+model Message {
+  id            String      @id @default(uuid())
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  senderUserId  String
+  sender        User        @relation("MessageSender", fields: [senderUserId], references: [id])
+  body          String
+  readAt        DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([applicationId])
+}
+
+model ApplicationEvent {
+  id            String            @id @default(uuid())
+  applicationId String
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actorUserId   String
+  actor         User              @relation("EventActor", fields: [actorUserId], references: [id])
+  fromStage     ApplicationStage?
+  toStage       ApplicationStage?
+  note          String?
+  createdAt     DateTime          @default(now())
+
+  @@index([applicationId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  payload   Json     @default("{}")
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+model Commission {
+  id            String           @id @default(uuid())
+  applicationId String
+  application   Application      @relation(fields: [applicationId], references: [id])
+  agencyId      String
+  amount        Int
+  currency      String           @default("USD")
+  status        CommissionStatus @default(pending)
+  note          String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([agencyId])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String?
+  actor        User?    @relation("AuditActor", fields: [actorUserId], references: [id])
+  action       String
+  resourceType String
+  resourceId   String?
+  ip           String?
+  userAgent    String?
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([resourceType, resourceId])
+  @@index([actorUserId])
+}
