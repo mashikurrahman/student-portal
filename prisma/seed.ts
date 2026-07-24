@@ -1,10 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import { hash } from "@node-rs/argon2";
+import { seedGermany } from "./seeds/germany";
 
 /**
  * Seeds a demo agency, one user per role, and a small catalog with
- * RequirementSets. Idempotent: safe to run repeatedly. Demo password for all
- * accounts: "Password123!".
+ * RequirementSets (including the full Germany catalog). Idempotent: safe to run
+ * repeatedly. Demo password for all accounts: "Password123!".
  */
 const prisma = new PrismaClient();
 
@@ -93,6 +94,37 @@ async function main() {
     create: { agencyId: agency.id, agentUserId: agent.id, studentUserId: student.id },
   });
 
+  // Additional student login (requested): ashik@sutent.portal / Password123!
+  const ashik = await prisma.user.upsert({
+    where: { email: "ashik@sutent.portal" },
+    update: { passwordHash, status: "active", emailVerifiedAt: new Date() },
+    create: {
+      email: "ashik@sutent.portal",
+      role: "student",
+      agencyId: agency.id,
+      passwordHash,
+      emailVerifiedAt: new Date(),
+      status: "active",
+      profile: {
+        create: {
+          fullName: "Ashik",
+          nationality: "BD",
+          educationHistory: [
+            { level: "bachelor", institution: "BUET", gpa: 3.5, gpaScale: 4, year: 2025 },
+          ],
+          testScores: { ielts: 7.0 },
+          budgetAnnual: 15000,
+          targetIntake: "Fall 2026",
+        },
+      },
+    },
+  });
+  await prisma.assignment.upsert({
+    where: { agentUserId_studentUserId: { agentUserId: agent.id, studentUserId: ashik.id } },
+    update: {},
+    create: { agencyId: agency.id, agentUserId: agent.id, studentUserId: ashik.id },
+  });
+
   // ---- Catalog: Canada → University of Toronto → MSc CS ----
   const canada = await prisma.country.upsert({
     where: { isoCode: "CA" },
@@ -165,8 +197,12 @@ async function main() {
     }
   }
 
+  // Full Germany catalog (see docs/catalog/germany.md).
+  await seedGermany(prisma);
+
   console.log("Seed complete. Demo login password:", DEMO_PASSWORD);
   console.log("Users: student@demo.local, agent@demo.local, admin@demo.local, super@demo.local");
+  console.log("Extra student: ashik@sutent.portal");
 }
 
 main()
