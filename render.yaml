@@ -15,8 +15,8 @@ services:
     name: student-portal
     runtime: node
     plan: free
-    # Migrations run at build time (idempotent); then the app is built.
-    buildCommand: npm ci && npx prisma migrate deploy && npm run build
+    # Migrations + idempotent seed run at build time; then the app is built.
+    buildCommand: npm ci && npx prisma migrate deploy && npm run db:seed && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
