@@ -62,10 +62,10 @@ async function main() {
 
   await Promise.all([
     prisma.user.upsert({
-      where: { email: "admin@demo.local" },
-      update: {},
+      where: { email: "admin@studentportal.com" },
+      update: { passwordHash, status: "active", emailVerifiedAt: new Date() },
       create: {
-        email: "admin@demo.local",
+        email: "admin@studentportal.com",
         role: "agency_admin",
         agencyId: agency.id,
         passwordHash,
@@ -201,7 +201,7 @@ async function main() {
   await seedGermany(prisma);
 
   console.log("Seed complete. Demo login password:", DEMO_PASSWORD);
-  console.log("Users: student@demo.local, agent@demo.local, admin@demo.local, super@demo.local");
+  console.log("Users: student@demo.local, agent@demo.local, admin@studentportal.com, super@demo.local");
   console.log("Extra student: ashik@sutent.portal");
 }
 
