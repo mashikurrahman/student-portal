@@ -8,9 +8,12 @@ const config: Config = {
         brand: {
           50: "#eef4ff",
           100: "#d9e6ff",
+          200: "#bcd2ff",
           500: "#3b6cff",
           600: "#2f56d9",
           700: "#2645ad",
+          800: "#1f3a8a",
+          900: "#1a2f6b",
         },
       },
     },
