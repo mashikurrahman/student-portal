@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/server/auth/options";
 import { agentRepository } from "@/server/repositories/agent.repository";
 import { Badge, eligibilityTone, statusTone } from "@/components/Badge";
+import { ProgressTracker } from "@/components/ProgressTracker";
 import { MessagePanel } from "@/components/MessagePanel";
 import { docTypeLabel, ELIGIBILITY_LABELS, stageLabel } from "@/lib/labels";
 import { DocumentReview } from "./DocumentReview";
@@ -56,6 +57,8 @@ export default async function AgentApplicationDetail({
             <Badge tone="neutral">{stageLabel(app.stage)}</Badge>
           </div>
         </header>
+
+        <ProgressTracker stage={app.stage} />
 
         <section>
           <div className="flex items-center justify-between">

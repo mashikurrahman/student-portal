@@ -4,6 +4,7 @@ import { authOptions } from "@/server/auth/options";
 import { applicationRepository } from "@/server/repositories/application.repository";
 import { buildChecklist, isCorePhaseComplete } from "@/server/services/checklist";
 import { Badge, eligibilityTone, statusTone } from "@/components/Badge";
+import { ProgressTracker } from "@/components/ProgressTracker";
 import { MessagePanel } from "@/components/MessagePanel";
 import { docTypeLabel, ELIGIBILITY_LABELS, stageLabel } from "@/lib/labels";
 import { DocumentUploader } from "./DocumentUploader";
@@ -49,6 +50,13 @@ export default async function ApplicationDetail({
   const coreComplete = isCorePhaseComplete(required, uploaded);
   const canSubmit = app.stage === "documents_pending" && coreComplete;
 
+  // Checklist completion summary (required documents only).
+  const requiredItems = checklist.filter((c) => c.required);
+  const approvedCount = requiredItems.filter((c) => c.status === "approved").length;
+  const percent = requiredItems.length
+    ? Math.round((approvedCount / requiredItems.length) * 100)
+    : 0;
+
   return (
     <div className="space-y-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
@@ -69,8 +77,21 @@ export default async function ApplicationDetail({
         )}
       </header>
 
+      <ProgressTracker stage={app.stage} />
+
       <section>
-        <h2 className="text-lg font-semibold text-slate-900">Document checklist</h2>
+        <div className="flex items-end justify-between gap-4">
+          <h2 className="text-lg font-semibold text-slate-900">Document checklist</h2>
+          <span className="text-sm text-slate-500">
+            {approvedCount} of {requiredItems.length} required approved
+          </span>
+        </div>
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+          <div
+            className="h-full rounded-full bg-brand-600 transition-all"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
         <ul className="mt-4 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
           {checklist.map((item) => (
             <li key={item.documentType} className="flex items-center justify-between gap-4 px-5 py-4">

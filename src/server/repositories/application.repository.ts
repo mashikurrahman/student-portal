@@ -12,6 +12,7 @@ export const applicationRepository = {
       orderBy: { createdAt: "desc" },
       include: {
         program: { include: { university: { include: { country: true } } } },
+        requirementSet: { select: { applicationDeadline: true } },
       },
     });
   },
